@@ -12,7 +12,7 @@ LOCAL_HOSTNAME=`curl http://169.254.169.254/latest/meta-data/local-hostname`
 # and it will be easy to log forwarders to locate them on every auth server
 # note though, that host_uuid MUST be unique, otherwise all sorts of unintended
 # things will happen.
-echo $${LOCAL_HOSTNAME} > /var/lib/teleport/host_uuid
+echo ${LOCAL_HOSTNAME} > /var/lib/teleport/host_uuid
 chown -R teleport:adm /var/lib/teleport
 
 if [ "${TELEPORT_ROLE}" = "auth" ]; then
