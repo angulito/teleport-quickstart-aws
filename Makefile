@@ -10,7 +10,7 @@ BUILD_SUBNET_ID ?=
 AWS_REGION ?= us-west-2
 
 # Teleport version
-TELEPORT_VERSION ?= 2.6.0-alpha.5
+TELEPORT_VERSION ?= 2.6.0-alpha.6
 
 # Teleport UID is a UID of a non-privileged user ID of a teleport
 TELEPORT_UID ?= 1007
@@ -26,11 +26,21 @@ STACK ?=
 
 # Stack parameters, e.g ParameterKey=KeyName,ParameterValue=KeyName ParameterKey=DomainName,ParameterValue=teleport.example.com ParameterKey=DomainAdminEmail,ParameterValue=admin@example.com ParameterKey=HostedZoneID,ParameterValue=AWSZONEID
 STACK_PARAMS ?=
+
+# License S3 URI for enterprise builds, e.g. s3://example.com/path/to/license
+TELEPORT_LICENSE_URI ?=
 export
 
 .PHONY: oss
 oss: TELEPORT_TYPE=oss
 oss:
+	@echo "Building image $(TELEPORT_VERSION) $(TELEPORT_TYPE)"
+	packer build -force template.json
+
+.PHONY: ent
+ent: TELEPORT_TYPE=ent
+ent: check-ent-vars
+	aws s3 cp $(TELEPORT_LICENSE_URI) files/system/license.pem
 	@echo "Building image $(TELEPORT_VERSION) $(TELEPORT_TYPE)"
 	packer build -force template.json
 
@@ -55,3 +65,12 @@ describe-stack:
 .PHONY: delete-stack
 delete-stack:
 	aws --region=$(AWS_REGION) cloudformation delete-stack --stack-name $(STACK)
+
+.PHONY: check-ent-vars
+check-ent-vars:
+	@if [ -z "$(TELEPORT_VERSION)" ]; then \
+	  echo "TELEPORT_VERSION is not set"; exit 1; \
+	fi;
+	@if [ -z "$(TELEPORT_LICENSE_URI)" ]; then \
+	  echo "TELEPORT_LICENSE_URI is not set"; exit 1; \
+	fi;

@@ -54,8 +54,8 @@ Mappings:
     t2.micro: {Arch: HVM64}
 
   AWSRegionArch2AMI:
-    us-east-1: {HVM64 : ami-a84892d5}
-    us-west-2: {HVM64 : ami-08069d70}
+    us-east-1: {HVM64 : ami-6c11b111}
+    us-west-2: {HVM64 : ami-9fd4b1e7}
 
 
 Resources:
@@ -365,8 +365,8 @@ Resources:
 
             # Generate config and start proxy service
             /usr/bin/teleport-generate-config
-            systemctl enable teleport-ssm-publish-tokens.service teleport-ssm-publish-tokens.timer teleport-get-cert.service teleport-get-cert.timer
-            systemctl start --no-block teleport-auth teleport-ssm-publish-tokens.timer teleport-get-cert.timer
+            systemctl enable teleport-ssm-publish-tokens.service teleport-ssm-publish-tokens.timer teleport-get-cert.service teleport-get-cert.timer teleport-renew-cert.service teleport-renew-cert.timer
+            systemctl start --no-block teleport-auth teleport-ssm-publish-tokens.timer teleport-get-cert.timer teleport-renew-cert.timer
 
             # Check the status a couple of times until the teleport service starts or fails
             for i in {1..10}; do systemctl status teleport-auth && break || sleep 10; done
@@ -536,8 +536,8 @@ Resources:
 
             # Generate config and start proxy service
             /usr/bin/teleport-generate-config
-            systemctl enable teleport-proxy.service
-            systemctl start --no-block teleport-proxy.service
+            systemctl enable teleport-proxy.service teleport-check-cert.service teleport-check-cert.timer
+            systemctl start --no-block teleport-proxy.service teleport-check-cert.timer
 
             # Check the status a couple of times until the teleport service starts or fails
             for i in {1..10}; do systemctl status teleport-proxy && break || sleep 30; done
