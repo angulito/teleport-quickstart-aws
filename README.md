@@ -20,3 +20,14 @@ export STACK_PARAMS="ParameterKey=KeyName,ParameterValue=KeyName ParameterKey=Do
 make create-stack
 ```
 
+## Usage instructions
+
+After stack has been provisioned, add admin user:
+
+```
+ssh -i key.pem -o ProxyCommand="ssh -i key.pem -W %h:%p ec2-user@PROXY_SERVER" ec2-user@$AUTH_SERVER
+sudo -u teleport tctl users add bob --roles=admin
+```
+
+
+

@@ -49,15 +49,23 @@ Parameters:
     Type: String
     Default: 10.0.3.0/24
 
+  CIDRNodeA:
+    Type: String
+    Default: 10.0.4.0/24
+
+  CIDRNodeB:
+    Type: String
+    Default: 10.0.5.0/24
+
 Mappings:
   AWSInstanceType2Arch:
     t2.micro: {Arch: HVM64}
 
   AWSRegionArch2AMI:
-    eu-west-1: {HVM64 : ami-ebbde492}
-    us-east-1: {HVM64 : ami-722a830f}
-    us-east-2: {HVM64 : ami-cf1d2daa}
-    us-west-2: {HVM64 : ami-051d7b7d}
+    eu-west-1: {HVM64 : ami-b4d188cd}
+    us-east-1: {HVM64 : ami-2010b95d}
+    us-east-2: {HVM64 : ami-c50434a0}
+    us-west-2: {HVM64 : ami-e9741291}
 
 Resources:
   # Internet gateway is a routing target for 
@@ -199,6 +207,24 @@ Resources:
       SubnetId: {Ref: AuthSubnetA}
       RouteTableId: {Ref: PrivateRoutingTableA}
 
+  # NodeSubnetA is a private subnet
+  # used by nodes in the first availability zone
+  NodeSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock: {Ref: CIDRNodeA}
+      AvailabilityZone:
+        Fn::Select: [0, {'Fn::GetAZs': ''}]
+
+  # Associate auth subnet with a routing table
+  NodeSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: {Ref: NodeSubnetA}
+      RouteTableId: {Ref: PrivateRoutingTableA}
+
   # Elastic IP in the second AZ
   EIPB:
     Type: AWS::EC2::EIP
@@ -258,6 +284,24 @@ Resources:
       SubnetId: {Ref: AuthSubnetB}
       RouteTableId: {Ref: PrivateRoutingTableB}
 
+  # NodeSubnetB is a private subnet
+  # used by nodes in the first availability zone
+  NodeSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock: {Ref: CIDRNodeB}
+      AvailabilityZone:
+        Fn::Select: [1, {'Fn::GetAZs': ''}]
+
+  # Associate private subnet with a routing table B
+  NodeSubnetARouteTableAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: {Ref: NodeSubnetB}
+      RouteTableId: {Ref: PrivateRoutingTableB}
+
   # Auth server setup
   AuthSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -280,11 +324,33 @@ Resources:
           ToPort: 3025
           CidrIp: 0.0.0.0/0
 
+
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          Description: Egress is allowed anywhere
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/0
+
+  # Nodes could be only accessed from proxies
+  NodeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: {Ref: VPC}
+      GroupDescription: Allow proxy access
+      SecurityGroupIngress:
+
         - IpProtocol: tcp
-          Description: NLB originated traffic are allowed to use API
-          FromPort: 3025
-          ToPort: 3025
-          CidrIp: {Ref: CIDRProxyB}
+          Description: SSH keypair access is allowed from proxies
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: {Ref: ProxySecurityGroup}
+
+        - IpProtocol: tcp
+          Description: Teleport SSH access is allowed from proxies
+          FromPort: 3022
+          ToPort: 3022
+          SourceSecurityGroupId: {Ref: ProxySecurityGroup}
 
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -596,6 +662,68 @@ Resources:
       TargetGroupARNs:
         - {Ref: ProxyWebTargetGroup}
 
+
+  NodeLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    DependsOn:
+      - InternetGatewayAttachment
+    Properties:
+      KeyName:
+        Ref: KeyName
+      # This line finds appropriate image ID based on the arch, region and instance type using FindInMap function
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref 'AWS::Region', !FindInMap [AWSInstanceType2Arch, !Ref InstanceType, Arch]]
+      UserData:
+        Fn::Base64:
+          # Fn:Sub accepts two parameters as a list, the first one is the template
+          # the second parameter is a dictionary with template-local variables
+          Fn::Sub:
+          - |
+            #!/bin/bash -xe
+
+            # Indicate that this ami is node for all systemd units
+            echo "node" >> /etc/teleport.d/role.node
+
+            # Set some instance specific environment variables configurations for systemd configuration file
+            cat >> /etc/teleport.d/conf <<EOF
+            EC2_REGION=${AWS::Region}
+            TELEPORT_CLUSTER_NAME=${DomainName}
+            TELEPORT_DOMAIN_NAME=${DomainName}
+            TELEPORT_S3_BUCKET=${LocalBucketName}
+            TELEPORT_ROLE=node
+            TELEPORT_AUTH_SERVER_LB=${LocalAuthServerLB}
+            TELEPORT_SSM_KEY_ARN=${LocalKeyARN}
+            EOF
+
+            # Generate config and start proxy service
+            /usr/bin/teleport-generate-config
+            systemctl enable teleport-node.service
+            systemctl start --no-block teleport-node.service
+          - {
+            LocalAuthServerLB: !GetAtt AuthLB.DNSName,
+            LocalKeyARN: !GetAtt Key.Arn,
+            LocalBucketName: !Select [1, !Split [":::", !GetAtt Bucket.Arn]]
+            }
+      SecurityGroups:
+        - Ref: NodeSecurityGroup
+      InstanceType: {Ref: InstanceType}
+      AssociatePublicIpAddress: false
+      # IamInstance profile is an instance profile of the proxy
+      IamInstanceProfile: {Ref: NodeInstanceProfile}
+
+  NodeASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      # Use IDs of the subnets created in two AZs
+      # to let AWS know we want instances to be placed
+      # in those subnets.
+      VPCZoneIdentifier:
+        - {Ref: NodeSubnetA}
+        - {Ref: NodeSubnetB}
+      LaunchConfigurationName: {Ref: NodeLaunchConfig}
+      MinSize: 2
+      MaxSize: 2
+
   AuthRole:
     Type: AWS::IAM::Role
     Properties:
@@ -757,6 +885,55 @@ Resources:
       Roles:
       - {Ref: ProxyRole}
 
+  NodeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+
+  # Allows nodes to read SSM parameter store
+  # join tokens
+  NodePolicies:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Join ["-", [!Ref ProxyRole, "ssm"]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # Allow proxy to read tokens and CA from SSM parameter store
+          -
+            Effect: "Allow"
+            Resource: !Join ["", ["arn:aws:ssm:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":parameter/teleport/", !Ref DomainName, "/tokens/node"]]
+            Action:
+            - "ssm:GetParameters"
+            - "ssm:GetParametersByPath"
+            - "ssm:GetParameter"
+
+          # Allow proxy to read tokens and CA from SSM parameter store
+          -
+            Effect: "Allow"
+            Resource: !Join ["", ["arn:aws:ssm:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":parameter/teleport/", !Ref DomainName, "/ca"]]
+            Action:
+            - "ssm:GetParameters"
+            - "ssm:GetParametersByPath"
+            - "ssm:GetParameter"
+
+      Roles:
+      - {Ref: NodeRole}
+  NodeInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+      - {Ref: NodeRole}
+
   Key:
     Type: "AWS::KMS::Key"
     Properties:
@@ -786,7 +963,7 @@ Resources:
             Resource: "*"
         
           - 
-            Sid: "Allow use of the key"
+            Sid: "Allow auth use of the key"
             Effect: "Allow"
             Principal: 
               AWS: !GetAtt AuthRole.Arn
@@ -799,15 +976,25 @@ Resources:
             Resource: "*"
 
           -
-            Sid: "Allow use of the key"
+            Sid: "Allow proxy use of the key"
             Effect: "Allow"
             Principal:
               AWS: !GetAtt ProxyRole.Arn
             Action:
               - "kms:Decrypt"
               - "kms:DescribeKey"
-            Resource: "*"            
-      
+            Resource: "*"
+
+          -
+            Sid: "Allow node use of the key"
+            Effect: "Allow"
+            Principal:
+              AWS: !GetAtt NodeRole.Arn
+            Action:
+              - "kms:Decrypt"
+              - "kms:DescribeKey"
+            Resource: "*"
+
 
   # MainTable is a main dynamodb table
   # where teleport stores all relevant state
