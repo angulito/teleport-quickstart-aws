@@ -54,10 +54,10 @@ Mappings:
     t2.micro: {Arch: HVM64}
 
   AWSRegionArch2AMI:
-    us-east-1: {HVM64 : ami-238e205e}
-    us-east-2: {HVM64 : ami-31112154}
-    us-west-2: {HVM64 : ami-46ed8a3e}
-    eu-west-1: {HVM64 : ami-fa386183}
+    eu-west-1: {HVM64 : ami-ebbde492}
+    us-east-1: {HVM64 : ami-722a830f}
+    us-east-2: {HVM64 : ami-cf1d2daa}
+    us-west-2: {HVM64 : ami-051d7b7d}
 
 Resources:
   # Internet gateway is a routing target for 
@@ -396,6 +396,10 @@ Resources:
   AuthASG:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn: InternetGatewayAttachment
+    CreationPolicy:
+      ResourceSignal:
+        Count: 2
+        Timeout: PT10M
     UpdatePolicy:
       AutoScalingRollingUpdate:
         MaxBatchSize: 2
@@ -541,7 +545,9 @@ Resources:
             systemctl start --no-block teleport-proxy.service teleport-check-cert.timer
 
             # Check the status a couple of times until the teleport service starts or fails
-            for i in {1..10}; do systemctl status teleport-proxy && break || sleep 30; done
+            # Teleport proxy can take some time to start as it waits for letsencrypt cert
+            # to be provisioned.
+            for i in {1..40}; do systemctl status teleport-proxy && break || sleep 30; done
 
             # Get the last measure to collect status
             systemctl status teleport-proxy
@@ -566,6 +572,10 @@ Resources:
   ProxyASG: 
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn: InternetGatewayAttachment
+    CreationPolicy:
+      ResourceSignal:
+        Count: 2
+        Timeout: PT20M
     UpdatePolicy:
       AutoScalingRollingUpdate:
         MaxBatchSize: 1

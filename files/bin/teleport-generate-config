@@ -24,8 +24,8 @@ teleport:
   nodename: ${LOCAL_HOSTNAME}
   advertise_ip: ${LOCAL_IP}
   log:
-    output: stderr
-    severity: DEBUG
+    output: syslog
+    severity: INFO
 
   data_dir: /var/lib/teleport
   storage:
@@ -61,8 +61,8 @@ teleport:
   nodename: ${LOCAL_HOSTNAME}
   advertise_ip: ${LOCAL_IP}
   log:
-    output: stderr
-    severity: DEBUG
+    output: syslog
+    severity: INFO
 
   data_dir: /var/lib/teleport
   storage:
@@ -96,7 +96,7 @@ teleport:
   nodename: ${LOCAL_HOSTNAME}
   advertise_ip: ${LOCAL_IP}
   log:
-    output: stderr
+    output: syslog
     severity: INFO
 
   data_dir: /var/lib/teleport

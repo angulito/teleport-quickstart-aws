@@ -4,6 +4,6 @@ ConditionPathExists=/etc/teleport.d/role.proxy
 
 [Service]
 Type=oneshot
-User=teleport
+User=root
 Group=adm
 ExecStart=/usr/bin/teleport-check-cert
