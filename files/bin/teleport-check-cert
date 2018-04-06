@@ -19,6 +19,6 @@ if [ $? -eq 0 ]; then
     echo "Certificates are equal, nothing to do"
 else
     echo "Certificates are different, going to update and restart proxy"
-    aws s3 sync s3://${TELEPORT_S3_BUCKET}/live/${TELEPORT_DOMAIN_NAME} /var/lib/teleport
+    su teleport -c "aws s3 sync --exact-timestamps s3://${TELEPORT_S3_BUCKET}/live/${TELEPORT_DOMAIN_NAME} /var/lib/teleport"
     systemctl reload teleport-proxy.service
 fi
