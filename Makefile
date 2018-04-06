@@ -10,7 +10,7 @@ BUILD_SUBNET_ID ?=
 AWS_REGION ?= us-west-2
 
 # Teleport version
-TELEPORT_VERSION ?= 2.6.0-alpha.6
+TELEPORT_VERSION ?= 2.6.0-alpha.8
 
 # Teleport UID is a UID of a non-privileged user ID of a teleport
 TELEPORT_UID ?= 1007
@@ -19,7 +19,9 @@ TELEPORT_UID ?= 1007
 INSTANCE_TYPE ?= t2.micro
 
 # Use comma-separated values without spaces for multiple regions
-DESTINATION_REGIONS ?= us-west-2,us-east-1
+# For now, limit AMI to regions with DynamoDB encryption at rest enabled
+# https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/EncryptionAtRest.html
+DESTINATION_REGIONS ?= us-west-2,us-east-1,us-east-2,eu-west-1
 
 # Cloudformation stack name to create, e.g. test1
 STACK ?=

@@ -54,9 +54,10 @@ Mappings:
     t2.micro: {Arch: HVM64}
 
   AWSRegionArch2AMI:
-    us-east-1: {HVM64 : ami-6c11b111}
-    us-west-2: {HVM64 : ami-9fd4b1e7}
-
+    us-east-1: {HVM64 : ami-238e205e}
+    us-east-2: {HVM64 : ami-31112154}
+    us-west-2: {HVM64 : ami-46ed8a3e}
+    eu-west-1: {HVM64 : ami-fa386183}
 
 Resources:
   # Internet gateway is a routing target for 
