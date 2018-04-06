@@ -43,6 +43,9 @@ else
     tar -xzf teleport.tar.gz
     cp teleport-ent/tctl teleport-ent/tsh teleport-ent/teleport /usr/bin
     rm -rf /tmp/teleport.tar.gz /tmp/teleport-ent
+    # Move enforcing license to the location expected by teleport
+    mv /etc/systemd/system/license.pem /var/lib/teleport/license.pem
+    chown teleport:adm /var/lib/teleport/license.pem
 fi
 popd
 

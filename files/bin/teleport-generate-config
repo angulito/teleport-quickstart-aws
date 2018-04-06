@@ -3,6 +3,7 @@
 # Setup teleport auth server config file
 LOCAL_IP=`curl http://169.254.169.254/latest/meta-data/local-ipv4`
 LOCAL_HOSTNAME=`curl http://169.254.169.254/latest/meta-data/local-hostname`
+LOCAL_HOSTNAME=${LOCAL_HOSTNAME//./-}
 
 # Source variables set up by cloudformation template
 . /etc/teleport.d/conf
@@ -64,6 +65,9 @@ teleport:
     severity: DEBUG
 
   data_dir: /var/lib/teleport
+  storage:
+    type: dir
+    path: /var/lib/teleport/backend
   auth_servers:
     - ${TELEPORT_AUTH_SERVER_LB}:3025
 
@@ -96,6 +100,9 @@ teleport:
     severity: INFO
 
   data_dir: /var/lib/teleport
+  storage:
+    type: dir
+    path: /var/lib/teleport/backend
   auth_servers:
     - ${TELEPORT_AUTH_SERVER_LB}:3025
 
